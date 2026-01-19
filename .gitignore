@@ -1,0 +1,18 @@
+# Build artifacts
+build/
+bin/
+
+# Editor/IDE
+.cache/
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Compilation database (can be regenerated)
+compile_commands.json
+
+# Debug files
+*.dSYM/
+core
