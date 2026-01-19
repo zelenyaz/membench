@@ -9,7 +9,7 @@
 #define ZMM_SIZE		64
 
 // How often to update stats (must be power of 2 - 1)
-#define STATS_UPDATE_MASK 0x3FFF
+#define STATS_UPDATE_MASK 0x1ffff
 
 // Check if we should stop
 static inline int should_stop(worker_ctx_t *ctx, uint64_t ops)
@@ -63,22 +63,26 @@ void bench_rand_read(worker_ctx_t *ctx)
 
 			for (uint64_t iter = 0;
 				 iter < ctx->reuse_iter && !should_stop(ctx, ops); iter++) {
-				size_t		line_idx = prng_next(prng) % lines_per_region;
-				const char *ptr		 = region + line_idx * CACHE_LINE_SIZE;
-				__m512i		v		 = _mm512_load_si512((const __m512i *)ptr);
-				checksum			 = _mm512_xor_si512(checksum, v);
-				ops++;
+				do {
+					size_t		line_idx = prng_next(prng) % lines_per_region;
+					const char *ptr		 = region + line_idx * CACHE_LINE_SIZE;
+					__m512i		v		 = _mm512_load_si512((const __m512i *)ptr);
+					checksum			 = _mm512_xor_si512(checksum, v);
+					ops++;
+				} while (ops & STATS_UPDATE_MASK);
 				update_stats(ctx, ops, ops * CACHE_LINE_SIZE, 0);
 			}
 			region_idx++;
 		}
 	} else {
 		while (!should_stop(ctx, ops)) {
-			size_t		line_idx = prng_next(prng) % num_lines;
-			const char *ptr		 = buf + line_idx * CACHE_LINE_SIZE;
-			__m512i		v		 = _mm512_load_si512((const __m512i *)ptr);
-			checksum			 = _mm512_xor_si512(checksum, v);
-			ops++;
+			do {
+					size_t		line_idx = prng_next(prng) % num_lines;
+					const char *ptr		 = buf + line_idx * CACHE_LINE_SIZE;
+					__m512i		v		 = _mm512_load_si512((const __m512i *)ptr);
+					checksum			 = _mm512_xor_si512(checksum, v);
+					ops++;
+			} while (ops & STATS_UPDATE_MASK);
 			update_stats(ctx, ops, ops * CACHE_LINE_SIZE, 0);
 			if ((ops & STATS_UPDATE_MASK) == 0 && should_stop(ctx, ops))
 				break;
@@ -118,22 +122,26 @@ void bench_rand_write(worker_ctx_t *ctx)
 
 			for (uint64_t iter = 0;
 				 iter < ctx->reuse_iter && !should_stop(ctx, ops); iter++) {
-				size_t line_idx = prng_next(prng) % lines_per_region;
-				char  *ptr		= region + line_idx * CACHE_LINE_SIZE;
-				_mm512_store_si512((__m512i *)ptr, val);
-				val = _mm512_add_epi64(val, _mm512_set1_epi64(1));
-				ops++;
+				do {
+					size_t line_idx = prng_next(prng) % lines_per_region;
+					char  *ptr		= region + line_idx * CACHE_LINE_SIZE;
+					_mm512_store_si512((__m512i *)ptr, val);
+					val = _mm512_add_epi64(val, _mm512_set1_epi64(1));
+					ops++;
+				} while (ops & STATS_UPDATE_MASK);
 				update_stats(ctx, ops, 0, ops * CACHE_LINE_SIZE);
 			}
 			region_idx++;
 		}
 	} else {
 		while (!should_stop(ctx, ops)) {
-			size_t line_idx = prng_next(prng) % num_lines;
-			char  *ptr		= buf + line_idx * CACHE_LINE_SIZE;
-			_mm512_store_si512((__m512i *)ptr, val);
-			val = _mm512_add_epi64(val, _mm512_set1_epi64(1));
-			ops++;
+			do {
+				size_t line_idx = prng_next(prng) % num_lines;
+				char  *ptr		= buf + line_idx * CACHE_LINE_SIZE;
+				_mm512_store_si512((__m512i *)ptr, val);
+				val = _mm512_add_epi64(val, _mm512_set1_epi64(1));
+				ops++;
+			} while (ops & STATS_UPDATE_MASK);
 			update_stats(ctx, ops, 0, ops * CACHE_LINE_SIZE);
 			if ((ops & STATS_UPDATE_MASK) == 0 && should_stop(ctx, ops))
 				break;
@@ -173,13 +181,15 @@ void bench_rand_rw(worker_ctx_t *ctx)
 
 			for (uint64_t iter = 0;
 				 iter < ctx->reuse_iter && !should_stop(ctx, ops); iter++) {
-				size_t	line_idx = prng_next(prng) % lines_per_region;
-				char   *ptr		 = region + line_idx * CACHE_LINE_SIZE;
-				__m512i v		 = _mm512_load_si512((const __m512i *)ptr);
-				v				 = _mm512_add_epi64(v, add_val);
-				_mm512_store_si512((__m512i *)ptr, v);
-				checksum = _mm512_xor_si512(checksum, v);
-				ops++;
+				do {
+					size_t	line_idx = prng_next(prng) % lines_per_region;
+					char   *ptr		 = region + line_idx * CACHE_LINE_SIZE;
+					__m512i v		 = _mm512_load_si512((const __m512i *)ptr);
+					v				 = _mm512_add_epi64(v, add_val);
+					_mm512_store_si512((__m512i *)ptr, v);
+					checksum = _mm512_xor_si512(checksum, v);
+					ops++;
+				} while (ops & STATS_UPDATE_MASK);
 				uint64_t bytes = ops * CACHE_LINE_SIZE;
 				update_stats(ctx, ops, bytes, bytes);
 			}
@@ -187,13 +197,15 @@ void bench_rand_rw(worker_ctx_t *ctx)
 		}
 	} else {
 		while (!should_stop(ctx, ops)) {
-			size_t	line_idx = prng_next(prng) % num_lines;
-			char   *ptr		 = buf + line_idx * CACHE_LINE_SIZE;
-			__m512i v		 = _mm512_load_si512((const __m512i *)ptr);
-			v				 = _mm512_add_epi64(v, add_val);
-			_mm512_store_si512((__m512i *)ptr, v);
-			checksum = _mm512_xor_si512(checksum, v);
-			ops++;
+			do {
+				size_t	line_idx = prng_next(prng) % num_lines;
+				char   *ptr		 = buf + line_idx * CACHE_LINE_SIZE;
+				__m512i v		 = _mm512_load_si512((const __m512i *)ptr);
+				v				 = _mm512_add_epi64(v, add_val);
+				_mm512_store_si512((__m512i *)ptr, v);
+				checksum = _mm512_xor_si512(checksum, v);
+				ops++;
+			} while (ops & STATS_UPDATE_MASK);
 			uint64_t bytes = ops * CACHE_LINE_SIZE;
 			update_stats(ctx, ops, bytes, bytes);
 			if ((ops & STATS_UPDATE_MASK) == 0 && should_stop(ctx, ops))

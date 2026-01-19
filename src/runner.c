@@ -68,7 +68,7 @@ int workload_init(workload_ctx_t *wctx, const bench_desc_t *bench,
 		w->start_time = &wctx->start_time;
 
 		// Initialize PRNG with unique seed per thread
-		prng_init(&w->prng, args->seed + (uint64_t)i * 0x9E3779B97F4A7C15ULL);
+		prng_init(&w->prng, args->seed + (uint64_t)i * 0x9E3779B97F4A7C15UL);
 	}
 
 	return 0;
