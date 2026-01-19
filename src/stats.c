@@ -31,9 +31,9 @@ void stats_destroy(stats_ctx_t *ctx)
 	}
 }
 
-void stats_start(stats_ctx_t *ctx)
+void stats_start(stats_ctx_t *ctx, struct timespec *start_time)
 {
-	clock_gettime(CLOCK_MONOTONIC, &ctx->start_time);
+	ctx->start_time = start_time;
 	atomic_store(&ctx->running, 1);
 }
 
@@ -42,8 +42,8 @@ double stats_elapsed(stats_ctx_t *ctx)
 	struct timespec now;
 	clock_gettime(CLOCK_MONOTONIC, &now);
 
-	double elapsed = (double)(now.tv_sec - ctx->start_time.tv_sec) +
-					 (double)(now.tv_nsec - ctx->start_time.tv_nsec) / 1e9;
+	double elapsed = (double)(now.tv_sec - ctx->start_time->tv_sec) +
+					 (double)(now.tv_nsec - ctx->start_time->tv_nsec) / 1e9;
 	return elapsed;
 }
 

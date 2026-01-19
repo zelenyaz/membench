@@ -4,11 +4,11 @@ A Linux C microbenchmark suite for memory read/write patterns using **AVX-512 in
 
 ## Features
 
-- **7 Benchmarks**: Sequential and random memory access patterns plus pointer chasing
+- **13 Benchmarks**: Sequential and random memory access patterns with optional reuse mode, plus pointer chasing
 - **3 Run Modes**: Single workload, sequential list, concurrent list
 - **2 Stop Modes**: Time-based or iteration-based
 - **Per-second stats**: Real-time throughput reporting
-- **Reuse mode**: Cache locality testing with configurable region sizes
+- **Reuse benchmarks**: Cache locality testing with `*_reuse` variants
 
 ## Building
 
@@ -38,6 +38,7 @@ make clean  # Clean build
 | `rand_write` | Random AVX-512 stores | 0 | 64/op |
 | `rand_rw` | Random 1:1 load+store | 64/op | 64/op |
 | `ptr_chase` | Pointer chasing (latency-bound) | 8/op | 0 |
+| `*_reuse` | Cache locality variants (e.g., `seq_read_reuse`) | same | same |
 
 ## Operation Definition
 
@@ -76,13 +77,13 @@ Run benchmarks simultaneously:
 ./bin/membench --mode concurrent --benches seq_read,rand_rw,ptr_chase --size 64M --threads 2 --seconds 5
 ```
 
-### Reuse Mode
+### Reuse Benchmarks
 
-Test cache effects with limited working set:
+Test cache effects with limited working set using `*_reuse` variants:
 
 ```bash
-./bin/membench --mode single --bench seq_read --size 256M --threads 4 --seconds 5 \
-    --reuse 1 --region-bytes 2M --reuse-iter 50000
+./bin/membench --mode single --bench seq_read_reuse --size 256M --threads 4 --seconds 5 \
+    --region-bytes 2M --reuse-iter 50000
 ```
 
 ## CLI Options
@@ -96,9 +97,8 @@ Test cache effects with limited working set:
 | `--threads` | Threads per benchmark | 4 |
 | `--seconds` | Run duration (time-based stop) | 5.0 |
 | `--iters` | Operation count (iteration-based stop) | - |
-| `--reuse` | Enable reuse mode (0 or 1) | 0 |
-| `--region-bytes` | Region size for reuse mode | 2M |
-| `--reuse-iter` | Iterations per region | 50000 |
+| `--region-bytes` | Region size for `*_reuse` benchmarks | 2M |
+| `--reuse-iter` | Iterations per region for `*_reuse` benchmarks | 50000 |
 | `--seed` | PRNG seed | 0x12345678DEADBEEF |
 | `--report-interval` | Stats interval in seconds | 1.0 |
 

@@ -14,7 +14,6 @@ void cli_init_defaults(cli_args_t *args)
 	args->threads		  = 4;
 	args->seconds		  = 5.0;
 	args->iters			  = 0;
-	args->reuse			  = 0;
 	args->region_bytes	  = 2 * 1024 * 1024; // 2 MB default
 	args->reuse_iter	  = 50000;
 	args->seed			  = 0x12345678DEADBEEFULL;
@@ -79,8 +78,7 @@ void cli_usage(const char *prog)
 		"Buffer Settings:\n"
 		"  --size <bytes>                   Buffer size per benchmark (default: 64M)\n"
 		"  --threads <N>                    Threads per benchmark (default: 4)\n\n"
-		"Reuse Mode:\n"
-		"  --reuse <0|1>                    Enable reuse mode (default: 0)\n"
+		"Reuse Mode Options (for *_reuse benchmarks):\n"
 		"  --region-bytes <bytes>           Region size for reuse (default: 2M)\n"
 		"  --reuse-iter <N>                 Iterations per region (default: 50000)\n\n"
 		"Other:\n"
@@ -90,7 +88,9 @@ void cli_usage(const char *prog)
 		"  --help                           Show this help\n\n"
 		"Available benchmarks:\n"
 		"  seq_read, seq_write, seq_rw\n"
+		"  seq_read_reuse, seq_write_reuse, seq_rw_reuse\n"
 		"  rand_read, rand_write, rand_rw\n"
+		"  rand_read_reuse, rand_write_reuse, rand_rw_reuse\n"
 		"  ptr_chase\n\n"
 		"Examples:\n"
 		"  %s --mode single --bench seq_read --size 64M --threads 4 --seconds 5\n"
@@ -109,7 +109,6 @@ int cli_parse(int argc, char **argv, cli_args_t *args)
 		{ "threads",		 required_argument, 0, 't' },
 		{ "seconds",		 required_argument, 0, 'T' },
 		{ "iters",		   required_argument, 0, 'i' },
-		{ "reuse",		   required_argument, 0, 'r' },
 		{ "region-bytes",	  required_argument, 0, 'R' },
 		{ "reuse-iter",		required_argument, 0, 'I' },
 		{ "seed",			  required_argument, 0, 'S' },
@@ -124,7 +123,7 @@ int cli_parse(int argc, char **argv, cli_args_t *args)
 
 	int opt;
 	int option_index = 0;
-	while ((opt = getopt_long(argc, argv, "m:b:B:s:t:T:i:r:R:I:S:p:P:h",
+	while ((opt = getopt_long(argc, argv, "m:b:B:s:t:T:i:R:I:S:p:P:h",
 							  long_options, &option_index)) != -1) {
 		switch (opt) {
 		case 'm':
@@ -164,9 +163,6 @@ int cli_parse(int argc, char **argv, cli_args_t *args)
 		case 'i':
 			args->iters = (uint64_t)strtoull(optarg, NULL, 10);
 			has_iters	= 1;
-			break;
-		case 'r':
-			args->reuse = atoi(optarg);
 			break;
 		case 'R':
 			args->region_bytes = parse_size(optarg);

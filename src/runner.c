@@ -55,7 +55,7 @@ int workload_init(workload_ctx_t *wctx, const bench_desc_t *bench,
 		w->thread_count = args->threads;
 		w->buffer		= (char *)wctx->buffer + (size_t)i * chunk_size;
 		w->buffer_size	= chunk_size;
-		w->reuse_mode	= args->reuse;
+		w->reuse_mode	= bench->reuse_mode;
 		w->region_bytes = args->region_bytes;
 		w->reuse_iter	= args->reuse_iter;
 		w->stop_flag	= &wctx->stop_flag;
@@ -116,8 +116,8 @@ int workload_start(workload_ctx_t *wctx)
 	if (!entries)
 		return -1;
 
-	// Start stats timing
-	stats_start(&wctx->stats);
+	// Start stats timing (shares start_time with workers)
+	stats_start(&wctx->stats, &wctx->start_time);
 
 	for (int i = 0; i < wctx->args->threads; i++) {
 		entries[i].ctx			= &wctx->worker_ctxs[i];

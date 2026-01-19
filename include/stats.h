@@ -37,9 +37,9 @@ typedef struct {
 	uint64_t total_bytes_wr;
 	uint64_t total_checksum;
 
-	// Timing
-	struct timespec start_time;
-	double			elapsed_sec;
+	// Timing (pointer to shared start time, owned by workload_ctx_t)
+	struct timespec *start_time;
+	double			 elapsed_sec;
 
 	// Control
 	atomic_int running;
@@ -52,8 +52,8 @@ int stats_init(stats_ctx_t *ctx, const char *bench_name, int thread_count);
 // Cleanup stats context
 void stats_destroy(stats_ctx_t *ctx);
 
-// Start timing
-void stats_start(stats_ctx_t *ctx);
+// Start timing (uses shared start_time pointer)
+void stats_start(stats_ctx_t *ctx, struct timespec *start_time);
 
 // Stop and compute final stats
 void stats_stop(stats_ctx_t *ctx);

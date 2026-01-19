@@ -3,6 +3,7 @@ build/
 bin/
 
 # Editor/IDE
+.agent/
 .cache/
 .vscode/
 .idea/
@@ -16,3 +17,5 @@ compile_commands.json
 # Debug files
 *.dSYM/
 core
+
+eval/

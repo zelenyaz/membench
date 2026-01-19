@@ -50,8 +50,9 @@ typedef void (*bench_func_t)(worker_ctx_t *ctx);
 typedef struct {
 	const char	*name;
 	bench_func_t func;
-	int			 reads;	 // 1 if benchmark reads
-	int			 writes; // 1 if benchmark writes
+	int			 reads;		 // 1 if benchmark reads
+	int			 writes;	 // 1 if benchmark writes
+	int			 reuse_mode; // 1 if benchmark uses reuse pattern
 } bench_desc_t;
 
 // Get benchmark by name
