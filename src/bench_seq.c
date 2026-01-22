@@ -93,6 +93,57 @@ void bench_seq_read(worker_ctx_t *ctx)
 	ctx->stats->bytes_wr = 0;
 }
 
+// Sequential read using scalar 8-byte loads (no AVX)
+void bench_seq_read_scalar(worker_ctx_t *ctx)
+{
+	const uint64_t *buf	  = (const uint64_t *)ctx->buffer;
+	size_t			count = ctx->buffer_size / sizeof(uint64_t);
+	uint64_t		ops	  = 0;
+	uint64_t		sum	  = 0;
+
+	if (ctx->reuse_mode && ctx->region_bytes > 0) {
+		size_t region_count = ctx->region_bytes / sizeof(uint64_t);
+		if (region_count == 0)
+			region_count = 1;
+		size_t num_regions = count / region_count;
+		if (num_regions == 0)
+			num_regions = 1;
+
+		size_t region_idx = 0;
+		while (!should_stop(ctx, ops)) {
+			const uint64_t *region =
+				buf + (region_idx % num_regions) * region_count;
+
+			for (uint64_t iter = 0;
+				 iter < ctx->reuse_iter && !should_stop(ctx, ops); iter++) {
+				for (size_t i = 0; i < region_count; i++) {
+					sum += region[i];
+					ops++;
+					update_stats(ctx, ops, ops * sizeof(uint64_t), 0);
+					if ((ops & STATS_UPDATE_MASK) == 0 && should_stop(ctx, ops))
+						break;
+				}
+			}
+			region_idx++;
+		}
+	} else {
+		while (!should_stop(ctx, ops)) {
+			for (size_t i = 0; i < count; i++) {
+				sum += buf[i];
+				ops++;
+				update_stats(ctx, ops, ops * sizeof(uint64_t), 0);
+				if ((ops & STATS_UPDATE_MASK) == 0 && should_stop(ctx, ops))
+					break;
+			}
+		}
+	}
+
+	ctx->stats->checksum = sum;
+	ctx->stats->ops		 = ops;
+	ctx->stats->bytes_rd = ops * sizeof(uint64_t);
+	ctx->stats->bytes_wr = 0;
+}
+
 // Sequential write using AVX-512
 void bench_seq_write(worker_ctx_t *ctx)
 {

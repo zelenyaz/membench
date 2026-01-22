@@ -203,6 +203,9 @@ int run_single(cli_args_t *args)
 		return -1;
 	}
 
+	printf("Buffer info: start=%p, size=%zu bytes\n", wctx.buffer,
+		   args->buffer_size);
+
 	// Start reporter
 	atomic_int	   reporter_stop_flag = ATOMIC_VAR_INIT(0);
 	reporter_ctx_t reporter;
@@ -243,10 +246,14 @@ int run_sequential(cli_args_t *args)
 		printf("\n");
 
 		workload_ctx_t wctx;
+		// Run workload
 		if (workload_init(&wctx, bench, args) < 0) {
 			fprintf(stderr, "Failed to initialize workload: %s\n", bench->name);
 			continue;
 		}
+
+		printf("Buffer info: start=%p, size=%zu bytes\n", wctx.buffer,
+			   args->buffer_size);
 
 		// Start reporter
 		atomic_int	   reporter_stop_flag = ATOMIC_VAR_INIT(0);
@@ -334,9 +341,13 @@ int run_concurrent(cli_args_t *args)
 			continue;
 		}
 
-		stats_arr[active_count]			 = &wctxs[active_count].stats;
 		cws[active_count].wctx			 = &wctxs[active_count];
 		cws[active_count].global_barrier = &global_barrier;
+		stats_arr[active_count]			 = &wctxs[active_count].stats;
+
+		printf("[%s] Buffer info: start=%p, size=%zu bytes\n", bench->name,
+			   wctxs[active_count].buffer, args->buffer_size);
+
 		active_count++;
 	}
 

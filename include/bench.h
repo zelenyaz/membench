@@ -63,6 +63,7 @@ void bench_list_all(void);
 
 // Sequential benchmarks
 void bench_seq_read(worker_ctx_t *ctx);
+void bench_seq_read_scalar(worker_ctx_t *ctx);
 void bench_seq_write(worker_ctx_t *ctx);
 void bench_seq_rw(worker_ctx_t *ctx);
 

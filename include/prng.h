@@ -9,15 +9,20 @@ typedef struct {
 } prng_state_t;
 
 // Initialize PRNG with a seed
-void prng_init(prng_state_t *state, uint64_t seed);
+static inline void prng_init(prng_state_t *state, uint64_t seed)
+{
+	state->s[0] = seed ? seed : 1; // Ensure non-zero state
+}
 
 // Get next 64-bit random number (xorshift64)
-uint64_t prng_next(prng_state_t *state);
-
-// Get random number in range [0, max)
-static inline uint64_t prng_range(prng_state_t *state, uint64_t max)
+static inline uint64_t prng_next(prng_state_t *state)
 {
-	return prng_next(state) % max;
+	uint64_t x = state->s[0];
+	x ^= x << 13;
+	x ^= x >> 7;
+	x ^= x << 17;
+	state->s[0] = x;
+	return x;
 }
 
 #endif // PRNG_H

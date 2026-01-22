@@ -155,21 +155,22 @@ void bench_ptr_chase(worker_ctx_t *ctx)
 // Benchmark registry
 static const bench_desc_t benchmarks[] = {
 	// Standard benchmarks (no reuse)
-	{ "seq_read",		  bench_seq_read,	  1, 0, 0 },
-	{ "seq_write",		   bench_seq_write,	0, 1, 0 },
-	{ "seq_rw",			bench_seq_rw,	  1, 1, 0 },
-	{ "rand_read",		   bench_rand_read,	1, 0, 0 },
-	{ "rand_write",		bench_rand_write, 0, 1, 0 },
-	{ "rand_rw",			 bench_rand_rw,	1, 1, 0 },
-	{ "ptr_chase",		   bench_ptr_chase,	1, 0, 0 },
+	{ "seq_read",		  bench_seq_read,		  1, 0, 0 },
+	{ "seq_read_scalar",	 bench_seq_read_scalar, 1, 0, 0 },
+	{ "seq_write",		   bench_seq_write,		0, 1, 0 },
+	{ "seq_rw",			bench_seq_rw,		  1, 1, 0 },
+	{ "rand_read",		   bench_rand_read,		1, 0, 0 },
+	{ "rand_write",		bench_rand_write,	  0, 1, 0 },
+	{ "rand_rw",			 bench_rand_rw,			1, 1, 0 },
+	{ "ptr_chase",		   bench_ptr_chase,		1, 0, 0 },
 	// Reuse benchmarks (reuse_mode=1)
-	{ "seq_read_reuse",	bench_seq_read,	1, 0, 1 },
-	{ "seq_write_reuse",	 bench_seq_write,  0, 1, 1 },
-	{ "seq_rw_reuse",	  bench_seq_rw,		1, 1, 1 },
-	{ "rand_read_reuse",	 bench_rand_read,  1, 0, 1 },
-	{ "rand_write_reuse", bench_rand_write, 0, 1, 1 },
-	{ "rand_rw_reuse",	   bench_rand_rw,	  1, 1, 1 },
-	{ NULL,			   NULL,			  0, 0, 0 }
+	{ "seq_read_reuse",	bench_seq_read,		1, 0, 1 },
+	{ "seq_write_reuse",	 bench_seq_write,		  0, 1, 1 },
+	{ "seq_rw_reuse",	  bench_seq_rw,			1, 1, 1 },
+	{ "rand_read_reuse",	 bench_rand_read,		  1, 0, 1 },
+	{ "rand_write_reuse", bench_rand_write,		0, 1, 1 },
+	{ "rand_rw_reuse",	   bench_rand_rw,		  1, 1, 1 },
+	{ NULL,			   NULL,				  0, 0, 0 }
 };
 
 const bench_desc_t *bench_lookup(const char *name)

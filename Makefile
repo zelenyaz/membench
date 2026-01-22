@@ -31,7 +31,7 @@ clean:
 # Dependencies
 $(BUILD_DIR)/main.o: $(SRC_DIR)/main.c $(INC_DIR)/cli.h $(INC_DIR)/runner.h $(INC_DIR)/bench.h
 $(BUILD_DIR)/cli.o: $(SRC_DIR)/cli.c $(INC_DIR)/cli.h
-$(BUILD_DIR)/prng.o: $(SRC_DIR)/prng.c $(INC_DIR)/prng.h
+
 $(BUILD_DIR)/stats.o: $(SRC_DIR)/stats.c $(INC_DIR)/stats.h
 $(BUILD_DIR)/memory.o: $(SRC_DIR)/memory.c $(INC_DIR)/memory.h
 $(BUILD_DIR)/runner.o: $(SRC_DIR)/runner.c $(INC_DIR)/runner.h $(INC_DIR)/bench.h $(INC_DIR)/stats.h
