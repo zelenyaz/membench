@@ -1,11 +1,18 @@
 #include <stdio.h>
 #include <string.h>
 #include <time.h>
+#ifndef USE_64BIT
 #include <immintrin.h>
+#endif
 #include "bench.h"
 
 #define CACHE_LINE_SIZE 64
-#define ZMM_SIZE		64
+
+#ifdef USE_64BIT
+#define ACCESS_SIZE 8 // 64-bit = 8 bytes
+#else
+#define ACCESS_SIZE 64 // AVX-512 = 64 bytes (ZMM)
+#endif
 
 // How often to update stats (must be power of 2 - 1)
 #define STATS_UPDATE_MASK 0xFFFF
@@ -38,13 +45,17 @@ static inline void update_stats(worker_ctx_t *ctx, uint64_t ops,
 	}
 }
 
-// Sequential read using AVX-512
+// Sequential read
 void bench_seq_read(worker_ctx_t *ctx)
 {
-	const char *buf		 = (const char *)ctx->buffer;
-	size_t		size	 = ctx->buffer_size;
-	uint64_t	ops		 = 0;
-	__m512i		checksum = _mm512_setzero_si512();
+	const char *buf	 = (const char *)ctx->buffer;
+	size_t		size = ctx->buffer_size;
+	uint64_t	ops	 = 0;
+#ifdef USE_64BIT
+	uint64_t checksum = 0;
+#else
+	__m512i checksum = _mm512_setzero_si512();
+#endif
 
 	if (ctx->reuse_mode && ctx->region_bytes > 0) {
 		size_t region_size = ctx->region_bytes < size ? ctx->region_bytes :
@@ -59,12 +70,17 @@ void bench_seq_read(worker_ctx_t *ctx)
 
 			for (uint64_t iter = 0;
 				 iter < ctx->reuse_iter && !should_stop(ctx, ops); iter++) {
-				for (size_t off = 0; off < region_size; off += ZMM_SIZE) {
+				for (size_t off = 0; off < region_size; off += ACCESS_SIZE) {
+#ifdef USE_64BIT
+					uint64_t v = *(const uint64_t *)(region + off);
+					checksum ^= v;
+#else
 					__m512i v =
 						_mm512_load_si512((const __m512i *)(region + off));
 					checksum = _mm512_xor_si512(checksum, v);
+#endif
 					ops++;
-					update_stats(ctx, ops, ops * CACHE_LINE_SIZE, 0);
+					update_stats(ctx, ops, ops * ACCESS_SIZE, 0);
 					if ((ops & STATS_UPDATE_MASK) == 0 && should_stop(ctx, ops))
 						break;
 				}
@@ -73,23 +89,32 @@ void bench_seq_read(worker_ctx_t *ctx)
 		}
 	} else {
 		while (!should_stop(ctx, ops)) {
-			for (size_t off = 0; off < size; off += ZMM_SIZE) {
+			for (size_t off = 0; off < size; off += ACCESS_SIZE) {
+#ifdef USE_64BIT
+				uint64_t v = *(const uint64_t *)(buf + off);
+				checksum ^= v;
+#else
 				__m512i v = _mm512_load_si512((const __m512i *)(buf + off));
 				checksum  = _mm512_xor_si512(checksum, v);
+#endif
 				ops++;
-				update_stats(ctx, ops, ops * CACHE_LINE_SIZE, 0);
+				update_stats(ctx, ops, ops * ACCESS_SIZE, 0);
 				if ((ops & STATS_UPDATE_MASK) == 0 && should_stop(ctx, ops))
 					break;
 			}
 		}
 	}
 
+#ifdef USE_64BIT
+	ctx->stats->checksum = checksum;
+#else
 	uint64_t cs[8];
 	_mm512_storeu_si512((__m512i *)cs, checksum);
 	ctx->stats->checksum = cs[0] ^ cs[1] ^ cs[2] ^ cs[3] ^ cs[4] ^ cs[5] ^
 						   cs[6] ^ cs[7];
+#endif
 	ctx->stats->ops		 = ops;
-	ctx->stats->bytes_rd = ops * CACHE_LINE_SIZE;
+	ctx->stats->bytes_rd = ops * ACCESS_SIZE;
 	ctx->stats->bytes_wr = 0;
 }
 
@@ -144,13 +169,17 @@ void bench_seq_read_scalar(worker_ctx_t *ctx)
 	ctx->stats->bytes_wr = 0;
 }
 
-// Sequential write using AVX-512
+// Sequential write
 void bench_seq_write(worker_ctx_t *ctx)
 {
 	char	*buf  = (char *)ctx->buffer;
 	size_t	 size = ctx->buffer_size;
 	uint64_t ops  = 0;
-	__m512i	 val  = _mm512_set1_epi64((long long)(ctx->thread_id + 1));
+#ifdef USE_64BIT
+	uint64_t val = (uint64_t)(ctx->thread_id + 1);
+#else
+	__m512i val = _mm512_set1_epi64((long long)(ctx->thread_id + 1));
+#endif
 
 	if (ctx->reuse_mode && ctx->region_bytes > 0) {
 		size_t region_size = ctx->region_bytes < size ? ctx->region_bytes :
@@ -165,46 +194,70 @@ void bench_seq_write(worker_ctx_t *ctx)
 
 			for (uint64_t iter = 0;
 				 iter < ctx->reuse_iter && !should_stop(ctx, ops); iter++) {
-				for (size_t off = 0; off < region_size; off += ZMM_SIZE) {
+				for (size_t off = 0; off < region_size; off += ACCESS_SIZE) {
+#ifdef USE_64BIT
+					*(uint64_t *)(region + off) = val;
+#else
 					_mm512_store_si512((__m512i *)(region + off), val);
+#endif
 					ops++;
-					update_stats(ctx, ops, 0, ops * CACHE_LINE_SIZE);
+					update_stats(ctx, ops, 0, ops * ACCESS_SIZE);
 					if ((ops & STATS_UPDATE_MASK) == 0 && should_stop(ctx, ops))
 						break;
 				}
+#ifdef USE_64BIT
+				val++;
+#else
 				val = _mm512_add_epi64(val, _mm512_set1_epi64(1));
+#endif
 			}
 			region_idx++;
 		}
 	} else {
 		while (!should_stop(ctx, ops)) {
-			for (size_t off = 0; off < size; off += ZMM_SIZE) {
+			for (size_t off = 0; off < size; off += ACCESS_SIZE) {
+#ifdef USE_64BIT
+				*(uint64_t *)(buf + off) = val;
+#else
 				_mm512_store_si512((__m512i *)(buf + off), val);
+#endif
 				ops++;
-				update_stats(ctx, ops, 0, ops * CACHE_LINE_SIZE);
+				update_stats(ctx, ops, 0, ops * ACCESS_SIZE);
 				if ((ops & STATS_UPDATE_MASK) == 0 && should_stop(ctx, ops))
 					break;
 			}
+#ifdef USE_64BIT
+			val++;
+#else
 			val = _mm512_add_epi64(val, _mm512_set1_epi64(1));
+#endif
 		}
 	}
 
+#ifdef USE_64BIT
+	ctx->stats->checksum = val;
+#else
 	uint64_t cs[8];
 	_mm512_storeu_si512((__m512i *)cs, val);
 	ctx->stats->checksum = cs[0];
+#endif
 	ctx->stats->ops		 = ops;
 	ctx->stats->bytes_rd = 0;
-	ctx->stats->bytes_wr = ops * CACHE_LINE_SIZE;
+	ctx->stats->bytes_wr = ops * ACCESS_SIZE;
 }
 
 // Sequential read+write (1:1)
 void bench_seq_rw(worker_ctx_t *ctx)
 {
-	char	*buf	  = (char *)ctx->buffer;
-	size_t	 size	  = ctx->buffer_size;
-	uint64_t ops	  = 0;
-	__m512i	 checksum = _mm512_setzero_si512();
-	__m512i	 add_val  = _mm512_set1_epi64(1);
+	char	*buf  = (char *)ctx->buffer;
+	size_t	 size = ctx->buffer_size;
+	uint64_t ops  = 0;
+#ifdef USE_64BIT
+	uint64_t checksum = 0;
+#else
+	__m512i checksum = _mm512_setzero_si512();
+	__m512i add_val	 = _mm512_set1_epi64(1);
+#endif
 
 	if (ctx->reuse_mode && ctx->region_bytes > 0) {
 		size_t region_size = ctx->region_bytes < size ? ctx->region_bytes :
@@ -219,14 +272,21 @@ void bench_seq_rw(worker_ctx_t *ctx)
 
 			for (uint64_t iter = 0;
 				 iter < ctx->reuse_iter && !should_stop(ctx, ops); iter++) {
-				for (size_t off = 0; off < region_size; off += ZMM_SIZE) {
+				for (size_t off = 0; off < region_size; off += ACCESS_SIZE) {
+#ifdef USE_64BIT
+					uint64_t v = *(uint64_t *)(region + off);
+					v++;
+					*(uint64_t *)(region + off) = v;
+					checksum ^= v;
+#else
 					__m512i v =
 						_mm512_load_si512((const __m512i *)(region + off));
 					v = _mm512_add_epi64(v, add_val);
 					_mm512_store_si512((__m512i *)(region + off), v);
 					checksum = _mm512_xor_si512(checksum, v);
+#endif
 					ops++;
-					uint64_t bytes = ops * CACHE_LINE_SIZE;
+					uint64_t bytes = ops * ACCESS_SIZE;
 					update_stats(ctx, ops, bytes, bytes);
 					if ((ops & STATS_UPDATE_MASK) == 0 && should_stop(ctx, ops))
 						break;
@@ -236,13 +296,20 @@ void bench_seq_rw(worker_ctx_t *ctx)
 		}
 	} else {
 		while (!should_stop(ctx, ops)) {
-			for (size_t off = 0; off < size; off += ZMM_SIZE) {
+			for (size_t off = 0; off < size; off += ACCESS_SIZE) {
+#ifdef USE_64BIT
+				uint64_t v = *(uint64_t *)(buf + off);
+				v++;
+				*(uint64_t *)(buf + off) = v;
+				checksum ^= v;
+#else
 				__m512i v = _mm512_load_si512((const __m512i *)(buf + off));
 				v		  = _mm512_add_epi64(v, add_val);
 				_mm512_store_si512((__m512i *)(buf + off), v);
 				checksum = _mm512_xor_si512(checksum, v);
+#endif
 				ops++;
-				uint64_t bytes = ops * CACHE_LINE_SIZE;
+				uint64_t bytes = ops * ACCESS_SIZE;
 				update_stats(ctx, ops, bytes, bytes);
 				if ((ops & STATS_UPDATE_MASK) == 0 && should_stop(ctx, ops))
 					break;
@@ -250,11 +317,15 @@ void bench_seq_rw(worker_ctx_t *ctx)
 		}
 	}
 
+#ifdef USE_64BIT
+	ctx->stats->checksum = checksum;
+#else
 	uint64_t cs[8];
 	_mm512_storeu_si512((__m512i *)cs, checksum);
 	ctx->stats->checksum = cs[0] ^ cs[1] ^ cs[2] ^ cs[3] ^ cs[4] ^ cs[5] ^
 						   cs[6] ^ cs[7];
+#endif
 	ctx->stats->ops		 = ops;
-	ctx->stats->bytes_rd = ops * CACHE_LINE_SIZE;
-	ctx->stats->bytes_wr = ops * CACHE_LINE_SIZE;
+	ctx->stats->bytes_rd = ops * ACCESS_SIZE;
+	ctx->stats->bytes_wr = ops * ACCESS_SIZE;
 }
