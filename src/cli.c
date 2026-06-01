@@ -20,6 +20,7 @@ void cli_init_defaults(cli_args_t *args)
 	args->pin			  = 0;
 	args->report_interval = 1.0;
 	args->bench_count	  = 0;
+	args->numa_node		  = -1;
 }
 
 static size_t parse_size(const char *str)
@@ -54,8 +55,30 @@ static int parse_bench_list(const char *str, cli_args_t *args)
 	while (token && args->bench_count < MAX_BENCHES) {
 		while (*token == ' ')
 			token++;
-		strncpy(args->bench_list[args->bench_count], token, MAX_BENCH_NAME - 1);
-		args->bench_list[args->bench_count][MAX_BENCH_NAME - 1] = '\0';
+
+		// Check for name:threads format
+		char *colon = strchr(token, ':');
+		if (colon) {
+			// Parse thread count after colon
+			int nthreads = atoi(colon + 1);
+			if (nthreads < 1)
+				nthreads = 1;
+			args->bench_threads[args->bench_count] = nthreads;
+
+			// Copy bench name (up to colon)
+			size_t name_len = (size_t)(colon - token);
+			if (name_len >= MAX_BENCH_NAME)
+				name_len = MAX_BENCH_NAME - 1;
+			strncpy(args->bench_list[args->bench_count], token, name_len);
+			args->bench_list[args->bench_count][name_len] = '\0';
+		} else {
+			// No colon - use 0 to indicate global default
+			args->bench_threads[args->bench_count] = 0;
+			strncpy(args->bench_list[args->bench_count], token,
+					MAX_BENCH_NAME - 1);
+			args->bench_list[args->bench_count][MAX_BENCH_NAME - 1] = '\0';
+		}
+
 		args->bench_count++;
 		token = strtok(NULL, ",");
 	}
@@ -71,13 +94,14 @@ void cli_usage(const char *prog)
 		"Execution Modes:\n"
 		"  --mode <single|seq|concurrent>   Run mode (default: single)\n"
 		"  --bench <name>                   Benchmark for single mode\n"
-		"  --benches <list>                 Comma-separated benchmarks for seq/concurrent\n\n"
+		"  --benches <list>                 Comma-separated benchmarks for seq/concurrent\n"
+		"                                   Format: name[:threads],... (e.g., seq_read:2,rand_write:4)\n\n"
 		"Stop Conditions:\n"
 		"  --seconds <T>                    Run for T seconds (default: 5)\n"
 		"  --iters <N>                      Run for N operations\n\n"
 		"Buffer Settings:\n"
 		"  --size <bytes>                   Buffer size per benchmark (default: 64M)\n"
-		"  --threads <N>                    Threads per benchmark (default: 4)\n\n"
+		"  --threads <N>                    Default threads per benchmark (default: 4)\n\n"
 		"Reuse Mode Options (for *_reuse benchmarks):\n"
 		"  --region-bytes <bytes>           Region size for reuse (default: 2M)\n"
 		"  --reuse-iter <N>                 Iterations per region (default: 50000)\n\n"
@@ -85,17 +109,20 @@ void cli_usage(const char *prog)
 		"  --seed <N>                       PRNG seed\n"
 		"  --pin <0|1>                      CPU pinning (default: 0)\n"
 		"  --report-interval <sec>          Reporting interval (default: 1.0)\n"
+		"  --numa-node <N>                  Allocate buffer on NUMA node N (default: OS default)\n"
+		"  --numa-csv <file>                Log NUMA page distribution per 3s to CSV\n"
 		"  --help                           Show this help\n\n"
 		"Available benchmarks:\n"
-		"  seq_read, seq_write, seq_rw\n"
-		"  seq_read_reuse, seq_write_reuse, seq_rw_reuse\n"
-		"  rand_read, rand_write, rand_rw\n"
-		"  rand_read_reuse, rand_write_reuse, rand_rw_reuse\n"
+		"  seq_read, seq_read_pf, seq_read_scalar, seq_write, seq_rw, seq_wr\n"
+		"  seq_read_reuse, seq_read_pf_reuse, seq_write_reuse, seq_rw_reuse, seq_wr_reuse\n"
+		"  rand_read, rand_write, rand_rw, rand_wr\n"
+		"  rand_read_reuse, rand_write_reuse, rand_rw_reuse, rand_wr_reuse\n"
+		"  seq_2buf_rw_wr, rand_2buf_rw_wr (dual-buffer: 2x --size allocated)\n"
 		"  ptr_chase\n\n"
 		"Examples:\n"
 		"  %s --mode single --bench seq_read --size 64M --threads 4 --seconds 5\n"
-		"  %s --mode seq --benches seq_read,seq_write,rand_read --seconds 3\n"
-		"  %s --mode concurrent --benches seq_read,rand_rw --threads 2 --seconds 5\n",
+		"  %s --mode seq --benches seq_read:2,seq_write:4 --seconds 3\n"
+		"  %s --mode concurrent --benches seq_read:1,rand_rw:3 --size 64M --seconds 5\n",
 		prog, prog, prog, prog);
 }
 
@@ -114,6 +141,8 @@ int cli_parse(int argc, char **argv, cli_args_t *args)
 		{ "seed",			  required_argument, 0, 'S' },
 		{ "pin",			 required_argument, 0, 'p' },
 		{ "report-interval", required_argument, 0, 'P' },
+		{ "numa-node",	   required_argument, 0, 'N' },
+		{ "numa-csv",	    required_argument, 0, 'C' },
 		{ "help",			  no_argument,	   0, 'h' },
 		{ 0,				 0,				 0, 0	 }
 	};
@@ -123,7 +152,7 @@ int cli_parse(int argc, char **argv, cli_args_t *args)
 
 	int opt;
 	int option_index = 0;
-	while ((opt = getopt_long(argc, argv, "m:b:B:s:t:T:i:R:I:S:p:P:h",
+	while ((opt = getopt_long(argc, argv, "m:b:B:s:t:T:i:R:I:S:p:P:N:C:h",
 							  long_options, &option_index)) != -1) {
 		switch (opt) {
 		case 'm':
@@ -178,6 +207,13 @@ int cli_parse(int argc, char **argv, cli_args_t *args)
 			break;
 		case 'P':
 			args->report_interval = atof(optarg);
+			break;
+		case 'N':
+			args->numa_node = atoi(optarg);
+			break;
+		case 'C':
+			strncpy(args->numa_csv, optarg, MAX_PATH_LEN - 1);
+			args->numa_csv[MAX_PATH_LEN - 1] = '\0';
 			break;
 		case 'h':
 			cli_usage(argv[0]);

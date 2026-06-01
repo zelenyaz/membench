@@ -19,6 +19,7 @@ typedef enum
 
 #define MAX_BENCHES	   16
 #define MAX_BENCH_NAME 32
+#define MAX_PATH_LEN   256
 
 typedef struct {
 	run_mode_t	mode;
@@ -26,6 +27,7 @@ typedef struct {
 
 	char bench_name[MAX_BENCH_NAME];			  // for single mode
 	char bench_list[MAX_BENCHES][MAX_BENCH_NAME]; // for seq/concurrent
+	int	 bench_threads[MAX_BENCHES]; // threads per bench (0=use global)
 	int	 bench_count;
 
 	size_t buffer_size; // total buffer per benchmark
@@ -40,6 +42,8 @@ typedef struct {
 	uint64_t seed;			  // PRNG seed
 	int		 pin;			  // CPU pinning
 	double	 report_interval; // reporting interval in seconds
+	int		 numa_node;		  // NUMA node for buffer allocation (-1 = default)
+	char	 numa_csv[MAX_PATH_LEN]; // CSV file for NUMA distribution logging
 } cli_args_t;
 
 // Parse command-line arguments

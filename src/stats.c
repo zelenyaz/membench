@@ -2,6 +2,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <time.h>
+#include <errno.h>
 #include "stats.h"
 
 int stats_init(stats_ctx_t *ctx, const char *bench_name, int thread_count)
@@ -118,12 +120,30 @@ static void *reporter_thread_func(void *arg)
 {
 	reporter_ctx_t *rctx = (reporter_ctx_t *)arg;
 
-	struct timespec ts;
-	ts.tv_sec  = (time_t)rctx->interval_sec;
-	ts.tv_nsec = (long)((rctx->interval_sec - (double)ts.tv_sec) * 1e9);
+	long interval_ns = (long)(rctx->interval_sec * 1e9);
+
+	/* Sleep against an absolute deadline so a signal that interrupts the sleep
+	 * (e.g. a tiering controller that pauses this thread via SIGRTMIN) does not
+	 * trigger a spurious early report. clock_nanosleep returns EINTR on
+	 * interruption; we simply re-arm to the same absolute deadline, which also
+	 * keeps the reporting cadence fixed instead of drifting by the pause time. */
+	struct timespec next;
+	clock_gettime(CLOCK_MONOTONIC, &next);
 
 	while (!atomic_load(rctx->stop_flag)) {
-		nanosleep(&ts, NULL);
+		next.tv_sec  += interval_ns / 1000000000L;
+		next.tv_nsec += interval_ns % 1000000000L;
+		if (next.tv_nsec >= 1000000000L) {
+			next.tv_nsec -= 1000000000L;
+			next.tv_sec	 += 1;
+		}
+
+		int rc;
+		while ((rc = clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &next,
+									 NULL)) == EINTR) {
+			if (atomic_load(rctx->stop_flag))
+				break;
+		}
 
 		if (atomic_load(rctx->stop_flag))
 			break;
